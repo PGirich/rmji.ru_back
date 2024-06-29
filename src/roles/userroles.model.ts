@@ -14,7 +14,7 @@ interface UserRolesCreationAttributes {
   roleid: number
 }
 
-@Table({ tableName: 'UserRoles', createdAt: false, updatedAt: false })
+@Table({ tableName: 'userroles', createdAt: false, updatedAt: false })
 export class UserRoles extends Model<UserRoles, UserRolesCreationAttributes> {
   @ApiProperty({ example: '132', description: 'User role record id' })
   @Column({
