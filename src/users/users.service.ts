@@ -38,17 +38,12 @@ export class UsersService {
   async banUser(dto:BanUserDto) {
     const user = await this.usersRepo.findByPk(dto.userId)
     if (user) {
-      await user.$set('banned', dto.banned?'true':'false')
-      await user.$set('banReason', dto.banReason)
-      return dto
+      user.banned = dto.banned
+      user.banReason = dto.banReason
+      user.save()
+      return user
     }
     throw new HttpException(`User not found...`, HttpStatus.NOT_FOUND)
-
-
-    const role = await this.rolesService.getByValue('USER')
-    await user.$set('roles', [role.id])
-    user.roles = [role]
-    return user
   }
 
   async getUserByEmail(email: string) {
