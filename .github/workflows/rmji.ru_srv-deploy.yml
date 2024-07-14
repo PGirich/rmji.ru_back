@@ -1,0 +1,66 @@
+name: Deploy rmji.ru server
+
+on:
+  push:
+    branches: ["master"]
+
+env:
+  REGISTRY: ghcr.io
+  REGISTRY_USER: PGirich
+  IMAGE_NAME: pgirich/rmji_srv:latest
+  SSH: ssh ${{ secrets.VPS_LOGIN }}@${{ secrets.VPS_IP }} -i ~/.ssh/id_rsa
+
+jobs:
+  ############################################
+  publish:
+    name: Deploy rmji.ru
+    runs-on: ubuntu-latest
+    #needs: certbot
+
+    steps:
+      - name: ${{ github.actor }} run checkout for ${{ github.repository}}
+        uses: actions/checkout@v4
+
+      - name: Install SSH key of VPS
+        run: |
+          install -m 600 -D /dev/null ~/.ssh/id_rsa
+          echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_rsa
+          cat ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_IP }} > ~/.ssh/known_hosts
+
+      - name: Build the Docker image - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          docker build . --file Dockerfile --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Login to GitHub Container Registry - ${{ env.REGISTRY }}
+        run: |
+          docker login ${{ env.REGISTRY }}/${{ env.REGISTRY_USER }} -u ${{ env.REGISTRY_USER }} -p ${{ secrets.GHCR_PAT }}
+
+      - name: Push the Docker image
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Kill containers on VPS
+        run: |
+          ${{ env.SSH }} "sudo docker rm -f rmji || exit 0"
+
+      - name: Login to registry from VPS - ${{ env.REGISTRY }}/${{ env.REGISTRY_USER }}
+        run: |
+          ${{ env.SSH }} "sudo docker login ${{ env.REGISTRY }}/${{ env.REGISTRY_USER }} -u ${{ env.REGISTRY_USER }} -p ${{ secrets.GHCR_PAT }}"
+
+      - name: Pull app to VPS
+        run: |
+          ${{ env.SSH }} "sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+
+      - name: Create app container on VPS
+        run: |
+          ${{ env.SSH }} "sudo docker create \
+          -it -p 80:80 -p 443:443 \
+          -v ${{ env.CERT_PATH }}:/etc/letsencrypt \
+          --name rmji --pull never \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+          "
+
+      - name: Run app on VPS
+        run: |
+          ${{ env.SSH }} "sudo docker container start rmji"
